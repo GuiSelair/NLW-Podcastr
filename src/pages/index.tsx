@@ -7,6 +7,7 @@ import Link from 'next/link';
 import api from "../services/api";
 import { convertDurationToTimeString } from "../utils/convertDurationToTimeString";
 import styles from "../styles/home.module.scss";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 interface IEpisodes {
   id: string;
@@ -25,6 +26,58 @@ interface IHome {
 }
 
 export default function Home({ allEpisodes, latestEpisodes }: IHome) {
+  const [episodes, setEpisodes] = useState(allEpisodes);
+  const [currentPage, setCurrentPage] = useState(2);
+  const [hasEndingPosts, setHasEndingPosts] = useState(false);
+  const loaderRef = useRef(null);
+
+  useEffect(() => {
+    const options = {
+      root: null,
+      rootMargin: "20px",
+      threshold: 1.0
+    };
+
+    const observer = new IntersectionObserver(handleObserver, options);
+
+    if (loaderRef.current){
+      console.log("Declarando Observer:", observer);
+      observer.observe(loaderRef.current);
+    }
+  }, []);
+
+  const handleObserver = useCallback((entities) => {
+    console.log(entities);
+    const target = entities[0];
+
+    if (target.isIntersecting){
+      setCurrentPage(old => old + 1);
+    }
+  }, []);
+
+  useEffect(() => {
+    console.log("handleLoadMore");
+    const handleResquest = async () => {
+      const { data } = await api.get('episodes', {
+        params: {
+          _page: currentPage,
+          _limit: 3,
+          _sort:"published_at",
+          _order: "desc"
+        }
+      });
+      console.log({data});
+
+      if (!data.length){
+        setHasEndingPosts(true);
+        return;
+      }
+
+      setEpisodes([...episodes, ...data]);
+    }
+    handleResquest();
+  }, [currentPage]);
+
   return (
     <div className={styles.homepage}>
       <section className={styles.latestEpisodes}>
@@ -56,7 +109,7 @@ export default function Home({ allEpisodes, latestEpisodes }: IHome) {
           ))}
         </ul>
       </section>
-      <section className={styles.allEpisodes}>
+      <section className={styles.allEpisodes} >
         <h2>Todos episódios</h2>
         <table cellSpacing={0}>
           <thead>
@@ -70,7 +123,7 @@ export default function Home({ allEpisodes, latestEpisodes }: IHome) {
             </tr>
           </thead>
           <tbody>
-            {allEpisodes.map(episode => (
+            {episodes.map(episode => (
               <tr key={episode.id}>
                 <td style={{width: 72}}>
                   <Image width={120} height={120} src={episode.thumbnail} alt={episode.title} objectFit="cover"/>
@@ -92,21 +145,21 @@ export default function Home({ allEpisodes, latestEpisodes }: IHome) {
             ))}
           </tbody>
         </table>
+        {!hasEndingPosts && <p ref={loaderRef}>Carregar mais episodios...</p>}
       </section>
     </div>
   )
 }
 
-
 export const getStaticProps: GetStaticProps = async (context) => {
   const { data } = await api.get('episodes', {
     params: {
-      _limite: 12,
+      _page: 1,
+      _limit: 3,
       _sort:"published_at",
       _order: "desc"
     }
   });
-
   const episodes = data.map(episode => {
     return {
       id: episode.id,
