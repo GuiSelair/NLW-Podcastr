@@ -38,20 +38,18 @@ export default function Home({ allEpisodes, latestEpisodes }: IHome) {
       threshold: 1.0
     };
 
-    const observer = new IntersectionObserver(handleObserver, options);
+    const observer = new IntersectionObserver((entities) => {
+      console.log(entities);
+      const target = entities[0];
+
+      if (target.isIntersecting){
+        setCurrentPage(old => old + 1);
+      }
+    }, options);
 
     if (loaderRef.current){
       console.log("Declarando Observer:", observer);
       observer.observe(loaderRef.current);
-    }
-  }, []);
-
-  const handleObserver = useCallback((entities) => {
-    console.log(entities);
-    const target = entities[0];
-
-    if (target.isIntersecting){
-      setCurrentPage(old => old + 1);
     }
   }, []);
 
@@ -61,7 +59,7 @@ export default function Home({ allEpisodes, latestEpisodes }: IHome) {
       const { data } = await api.get('episodes', {
         params: {
           _page: currentPage,
-          _limit: 3,
+          _limit: 2,
           _sort:"published_at",
           _order: "desc"
         }
@@ -73,7 +71,22 @@ export default function Home({ allEpisodes, latestEpisodes }: IHome) {
         return;
       }
 
-      setEpisodes([...episodes, ...data]);
+      const newEpisodes = data.map(episode => {
+        return {
+          id: episode.id,
+          title: episode.title,
+          thumbnail: episode.thumbnail,
+          members: episode.members,
+          publishedAt: format(parseISO(episode.published_at), 'd MMM yy', {
+            locale: ptBR,
+          }),
+          durationAsString: convertDurationToTimeString(Number(episode.file.duration)),
+          description: episode.description,
+          url: episode.file.url,
+        }
+      });
+
+      setEpisodes([...episodes, ...newEpisodes]);
     }
     handleResquest();
   }, [currentPage]);
@@ -155,7 +168,7 @@ export const getStaticProps: GetStaticProps = async (context) => {
   const { data } = await api.get('episodes', {
     params: {
       _page: 1,
-      _limit: 3,
+      _limit: 2,
       _sort:"published_at",
       _order: "desc"
     }
